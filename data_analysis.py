@@ -1,9 +1,10 @@
 from typing import List, Tuple
 import warnings
-warnings.filterwarnings('ignore')
+
+warnings.filterwarnings("ignore")
 
 from pathlib import Path
-from random import randint
+import random
 import matplotlib.pyplot as plt
 from concurrent.futures import ThreadPoolExecutor, wait
 
@@ -13,33 +14,21 @@ data_folder = Path("data/mp3/train_audio")
 
 
 def random_choice(max_value: int, chosen: List[int]) -> Tuple[int, List[int]]:
-    choice = randint(0, max_value)
+    choice = random.randint(0, max_value)
     while choice in chosen:
-        choice = randint(0, max_value - 1)
+        choice = random.randint(0, max_value - 1)
     chosen.append(choice)
     return choice, chosen
-
-
-def get_files() -> List[Path]:
-    folder_list = list(data_folder.iterdir())
-    chosen = []
-    result = []
-    for i in range(16):
-        random, chosen = random_choice(len(folder_list), chosen)
-        bird = folder_list[random]
-        result.append(next(bird.iterdir()))
-    return result
 
 
 def get_bird_name(path: Path) -> str:
     return str(path).split("/")[-2]
 
 
-def plot_spectrograms():
+def plot_spectrograms(files: List[Path]):
     fig, ax = plt.subplots(nrows=4, ncols=4, figsize=(18, 14), dpi=200)
 
     # use multiple workers to load and preprocess the data
-    files = get_files()
     data = []
     with ThreadPoolExecutor(max_workers=16) as executor:
         futures = []
@@ -57,12 +46,32 @@ def plot_spectrograms():
     for row in ax:
         for col in row:
             x, FS = data[i]
-            col.specgram(x[0], Fs=FS, NFFT=512, noverlap=0)
+            x = random.choice(x)
+            col.specgram(x, Fs=FS, NFFT=512, noverlap=0)
             col.title.set_text(get_bird_name(files[i]))
             i += 1
 
     plt.show()
 
 
+def plot_different_birds():
+    folder_list = list(data_folder.iterdir())
+    files = random.choices(folder_list, k=16)
+
+    plot_spectrograms(files)
+
+
+def plot_same_bird(bird_name: str = None):
+    if not bird_name:
+        folder_list = list(data_folder.iterdir())
+        bird_name = random.choice(folder_list).name
+
+    bird_folder = data_folder.joinpath(bird_name)
+    bird_files = list(bird_folder.iterdir())
+    files = random.choices(bird_files, k=16)
+
+    plot_spectrograms(files)
+
+
 if __name__ == "__main__":
-    plot_spectrograms()
+    plot_same_bird()
