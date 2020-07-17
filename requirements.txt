@@ -1,0 +1,4 @@
+matplotlib
+scipy
+librosa
+numba==0.48.0
