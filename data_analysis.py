@@ -6,7 +6,10 @@ warnings.filterwarnings("ignore")
 from pathlib import Path
 import random
 import matplotlib.pyplot as plt
-from concurrent.futures import ThreadPoolExecutor, wait
+from concurrent.futures import ProcessPoolExecutor, wait
+import librosa
+import librosa.display
+import numpy as np
 
 from data_preprocessing import process_file
 
@@ -26,11 +29,9 @@ def get_bird_name(path: Path) -> str:
 
 
 def plot_spectrograms(files: List[Path]):
-    fig, ax = plt.subplots(nrows=4, ncols=4, figsize=(18, 14), dpi=200)
-
     # use multiple workers to load and preprocess the data
     data = []
-    with ThreadPoolExecutor(max_workers=16) as executor:
+    with ProcessPoolExecutor(max_workers=8) as executor:
         futures = []
         for file in files:
             future = executor.submit(process_file, file)
@@ -42,21 +43,31 @@ def plot_spectrograms(files: List[Path]):
             data.append(future.result())
 
     # plot the spectrograms of the data
-    i = 0
-    for row in ax:
-        for col in row:
-            x, FS = data[i]
-            x = random.choice(x)
-            col.specgram(x, Fs=FS, NFFT=512, noverlap=0)
-            col.title.set_text(get_bird_name(files[i]))
-            i += 1
+    plt.figure(figsize=(18, 14), dpi=200)
+    for i in range(16):
+        x, FS = data[i]
+        if not x:
+            continue
+        x = random.choice(x)
 
+        plt.subplot(4, 4, i+1)
+        S = librosa.feature.melspectrogram(x, sr=FS, n_fft=2048, hop_length=512, n_mels=128)
+        S_DB = librosa.power_to_db(S, ref=np.max)
+        librosa.display.specshow(S_DB, sr=FS, hop_length=512, x_axis="time", y_axis="mel")
+        plt.colorbar(format='%+2.0f dB')
+        plt.title(get_bird_name(files[i]))
+
+    plt.tight_layout()
     plt.show()
 
 
 def plot_different_birds():
     folder_list = list(data_folder.iterdir())
-    files = random.choices(folder_list, k=16)
+    folders_list = random.choices(folder_list, k=20)
+
+    files = []
+    for folder in folders_list: # type: Path
+        files.append(random.choice(list(folder.iterdir())))
 
     plot_spectrograms(files)
 
@@ -68,10 +79,10 @@ def plot_same_bird(bird_name: str = None):
 
     bird_folder = data_folder.joinpath(bird_name)
     bird_files = list(bird_folder.iterdir())
-    files = random.choices(bird_files, k=16)
+    files = random.choices(bird_files, k=20)
 
     plot_spectrograms(files)
 
 
 if __name__ == "__main__":
-    plot_same_bird()
+    plot_different_birds()

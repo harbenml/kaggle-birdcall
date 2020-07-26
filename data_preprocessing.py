@@ -1,6 +1,11 @@
 from typing import List, Tuple, Set
 from pathlib import Path
 import shutil
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
+import time
+import warnings
+
+warnings.filterwarnings("ignore")
 
 import math
 import matplotlib.pyplot as plt
@@ -91,7 +96,7 @@ def get_existing_files() -> Set[Path]:
     return set(existing_files)
 
 
-def process_data(overwrite: bool = False):
+def data_preprocessing(overwrite: bool = False):
     existing_files = set()
     if not overwrite:
         existing_files = get_existing_files()
@@ -100,17 +105,41 @@ def process_data(overwrite: bool = False):
 
     files = []
     for folder in data_folder.iterdir():
-        files +=  list(folder.iterdir())
+        files += list(folder.iterdir())
 
     files = set(files) - existing_files
 
-    for file in files:
-        create_spectrograms(file)
+    with ProcessPoolExecutor(max_workers=8) as executor:
+        futures = []
+        for file in files:
+            future = executor.submit(create_spectrograms, file)
+            futures.append(future)
 
-        cmd = input()
-        if cmd == "q":
-            return
+        done = False
+        num_done = 0
+        check_interval = 10
+        while not done:
+            time.sleep(check_interval)
+
+            done = True
+            tmp = 0
+            for future in futures:
+                done &= future.done()
+                if future.done():
+                    tmp += 1
+
+            print(f"Done: {tmp}")
+            print(
+                f"Rate: {float(tmp - num_done) / float(check_interval)} files / second"
+            )
+            num_done = tmp
+
+            cmd = input()
+            if cmd == "q":
+                for future in futures:
+                    future.cancel()
+                break
 
 
 if __name__ == "__main__":
-    process_data()
+    data_preprocessing()
