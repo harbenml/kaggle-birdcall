@@ -11,7 +11,7 @@ import librosa
 import librosa.display
 import numpy as np
 
-from data_preprocessing import process_file
+import data_preprocessing
 
 data_folder = Path("data/mp3/train_audio")
 
@@ -34,7 +34,7 @@ def plot_spectrograms(files: List[Path]):
     with ProcessPoolExecutor(max_workers=8) as executor:
         futures = []
         for file in files:
-            future = executor.submit(process_file, file)
+            future = executor.submit(data_preprocessing.process_file, file)
             futures.append(future)
 
         wait(futures)
@@ -44,17 +44,27 @@ def plot_spectrograms(files: List[Path]):
 
     # plot the spectrograms of the data
     plt.figure(figsize=(18, 14), dpi=200)
-    for i in range(16):
-        x, FS = data[i]
+    j = 1
+    i = 0
+    while j < 17 and j != len(data):
+        x, sr = data[i]
+        i += 1
         if not x:
             continue
         x = random.choice(x)
 
-        plt.subplot(4, 4, i+1)
-        S = librosa.feature.melspectrogram(x, sr=FS, n_fft=2048, hop_length=512, n_mels=128)
+        plt.subplot(4, 4, j)
+        j += 1
+        S = data_preprocessing.create_spectrogram(x, sr)
         S_DB = librosa.power_to_db(S, ref=np.max)
-        librosa.display.specshow(S_DB, sr=FS, hop_length=512, x_axis="time", y_axis="mel")
-        plt.colorbar(format='%+2.0f dB')
+        librosa.display.specshow(
+            S_DB,
+            sr=sr,
+            hop_length=data_preprocessing.hop_length,
+            x_axis="time",
+            y_axis="mel",
+        )
+        plt.colorbar(format="%+2.0f dB")
         plt.title(get_bird_name(files[i]))
 
     plt.tight_layout()
@@ -66,7 +76,7 @@ def plot_different_birds():
     folders_list = random.choices(folder_list, k=20)
 
     files = []
-    for folder in folders_list: # type: Path
+    for folder in folders_list:  # type: Path
         files.append(random.choice(list(folder.iterdir())))
 
     plot_spectrograms(files)
