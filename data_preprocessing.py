@@ -14,7 +14,7 @@ import math
 import librosa
 import h5py
 
-sample_length = 5  # sample length in seconds
+sample_length = 10  # sample length in seconds
 
 data_folder = Path("data/mp3/train_audio")
 hdf_file_path = Path("data/spectrograms.hdf5")

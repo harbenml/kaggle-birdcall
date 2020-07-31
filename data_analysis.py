@@ -46,7 +46,7 @@ def plot_spectrograms(files: List[Path]):
     plt.figure(figsize=(18, 14), dpi=200)
     j = 1
     i = 0
-    while j < 17 and j != len(data):
+    while j < 17 and i != len(data):
         x, sr = data[i]
         i += 1
         if not x:
@@ -65,7 +65,9 @@ def plot_spectrograms(files: List[Path]):
             y_axis="mel",
         )
         plt.colorbar(format="%+2.0f dB")
-        plt.title(get_bird_name(files[i]))
+        plt.title(get_bird_name(files[i-1]))
+
+    print(f"Spectrogram shape {S.shape}")
 
     plt.tight_layout()
     plt.show()

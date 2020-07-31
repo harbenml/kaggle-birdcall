@@ -131,5 +131,7 @@ dmypy.json
 # custom
 .idea/
 data/
+model/
 analysis/
 test.py
+info.txt

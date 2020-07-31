@@ -2,14 +2,14 @@ from typing import Tuple
 import h5py
 from sklearn import preprocessing, utils
 from sklearn.model_selection import train_test_split
+import torch
+import numpy as np
 
 import data_preprocessing
 
 
 class DataLoader:
-    def __init__(self, batch_size: int):
-        self.batch_size = batch_size
-
+    def __init__(self):
         self.file = h5py.File(data_preprocessing.hdf_file_path, mode="r")
 
         j = 0
@@ -41,7 +41,9 @@ class DataLoader:
 
         if state < self.train_state:
             state = 0
-            self.x_train, self.y_train = utils.shuffle(self.x_train, self.y_train, random_state=32)
+            self.x_train, self.y_train = utils.shuffle(
+                self.x_train, self.y_train, random_state=32
+            )
 
         self.train_state = state
         print(f"Train state: {self.train_state}")
@@ -52,7 +54,9 @@ class DataLoader:
 
         if state < self.test_state:
             state = 0
-            self.x_test, self.y_test = utils.shuffle(self.x_test, self.y_test, random_state=64)
+            self.x_test, self.y_test = utils.shuffle(
+                self.x_test, self.y_test, random_state=64
+            )
 
         self.test_state = state
         print(f"Test state: {self.test_state}")
@@ -71,7 +75,7 @@ class DataLoader:
 
         return result_x, y, state
 
-    def _split_path(self, path: str) -> Tuple[str, int]:
+    def split_path(self, path: str) -> Tuple[str, int]:
         splits = path.split("_")
         return "".join(splits[:-1]), int(splits[-1])
 
@@ -79,6 +83,42 @@ class DataLoader:
         self.file.close()
 
 
+class TrainDataLoader(torch.utils.data.Dataset):
+    def __init__(self, dataloader: DataLoader):
+        self.dataloader = dataloader
+        self.file = None
+
+    def __len__(self):
+        return len(self.dataloader.x_train)
+
+    def __getitem__(self, item):
+        with h5py.File(data_preprocessing.hdf_file_path, mode="r") as file:
+            path, i = self.dataloader.split_path(self.dataloader.x_train[item])
+            return (
+                np.repeat(np.expand_dims(file[path].value[i], axis=0), repeats=3, axis=0),
+                self.dataloader.y_train[item],
+            )
+
+
+class ValDataLoader(torch.utils.data.Dataset):
+    def __init__(self, dataloader: DataLoader):
+        self.dataloader = dataloader
+        self.file = None
+
+    def __len__(self):
+        return len(self.dataloader.x_test)
+
+    def __getitem__(self, item):
+        with h5py.File(data_preprocessing.hdf_file_path, mode="r") as file:
+            path, i = self.dataloader.split_path(self.dataloader.x_test[item])
+            return (
+                np.repeat(np.expand_dims(file[path].value[i], axis=0), repeats=3, axis=0),
+                self.dataloader.y_test[item],
+            )
+
+
 if __name__ == "__main__":
-    dl = DataLoader(batch_size=16)
-    print(dl.get_test_batch())
+    dl = DataLoader()
+    train_dl = TrainDataLoader(dl)
+    print(train_dl.__len__())
+    print(train_dl.__getitem__(10)[0].shape)
