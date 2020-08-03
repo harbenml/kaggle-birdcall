@@ -14,8 +14,7 @@ data = ImageDataBunch.create(train_ds=train_dl, valid_ds=val_dl, num_workers=8)
 data.normalize()
 
 os.environ["TORCH_HOME"] = "model/pretrained"
-model = torchvision.models.resnet18(pretrained=False, num_classes=264)
 
-learn = Learner(data, model)
-learn.metrics = [accuracy]
-learn.fit(3)
+learn = create_cnn(data, torchvision.models.resnet18, metrics=accuracy)
+learn.loss_func = torch.nn.functional.cross_entropy
+learn.fit(10)

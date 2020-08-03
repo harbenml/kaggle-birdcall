@@ -7,6 +7,7 @@ import numpy as np
 
 import data_preprocessing
 
+num_classes = 264
 
 class DataLoader:
     def __init__(self):
@@ -87,6 +88,7 @@ class TrainDataLoader(torch.utils.data.Dataset):
     def __init__(self, dataloader: DataLoader):
         self.dataloader = dataloader
         self.file = None
+        self.c = num_classes
 
     def __len__(self):
         return len(self.dataloader.x_train)
@@ -104,6 +106,7 @@ class ValDataLoader(torch.utils.data.Dataset):
     def __init__(self, dataloader: DataLoader):
         self.dataloader = dataloader
         self.file = None
+        self.c = num_classes
 
     def __len__(self):
         return len(self.dataloader.x_test)
