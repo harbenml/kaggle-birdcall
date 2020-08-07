@@ -1,13 +1,23 @@
 from typing import Tuple
+from pathlib import Path
+import pickle
 import h5py
 from sklearn import preprocessing, utils
 from sklearn.model_selection import train_test_split
 import torch
 import numpy as np
+import pandas as pd
+
+from fastai.vision import *
 
 import data_preprocessing
 
 num_classes = 264
+
+train_csv_file = Path("data/train.csv")
+test_csv_file = Path("data/test.csv")
+label_encoder_file = Path("data/label_encoder.pkl")
+
 
 class DataLoader:
     def __init__(self):
@@ -23,7 +33,7 @@ class DataLoader:
                 for i in range(l):
                     x.append(f"{path}_{i}")
                     y.append(bird_name)
-                j += 1
+                    j += 1
 
         print(f"{j} files processed")
 
@@ -36,6 +46,17 @@ class DataLoader:
 
         self.train_state = 0
         self.test_state = 0
+
+    def save(self):
+        train_df = pd.DataFrame(data={"x": self.x_train, "y": self.y_train})
+        train_df.to_csv(train_csv_file)
+
+        test_df = pd.DataFrame(data={"x": self.x_test, "y": self.y_test})
+        test_df.to_csv(test_csv_file)
+
+        pickle.dump(
+            self.label_encoder, label_encoder_file.open("wb"), pickle.HIGHEST_PROTOCOL
+        )
 
     def get_train_batch(self):
         x, y, state = self._get_batch(self.x_train, self.y_train, self.train_state)
@@ -84,44 +105,73 @@ class DataLoader:
         self.file.close()
 
 
-class TrainDataLoader(torch.utils.data.Dataset):
-    def __init__(self, dataloader: DataLoader):
-        self.dataloader = dataloader
+class TrainDataLoader(torch.utils.data.Dataset, DataLoader):
+    def __init__(self):
+        df = pd.read_csv(train_csv_file)
+        self.x_train = df["x"].tolist()
+        self.y_train = df["y"].tolist()
+
         self.file = None
         self.c = num_classes
 
+    def get_state(self, **kwargs):
+        return {**kwargs}
+
     def __len__(self):
-        return len(self.dataloader.x_train)
+        return len(self.x_train)
 
     def __getitem__(self, item):
         with h5py.File(data_preprocessing.hdf_file_path, mode="r") as file:
-            path, i = self.dataloader.split_path(self.dataloader.x_train[item])
+            path, i = super().split_path(self.x_train[item])
             return (
-                np.repeat(np.expand_dims(file[path].value[i], axis=0), repeats=3, axis=0),
-                self.dataloader.y_train[item],
+                np.repeat(
+                    np.expand_dims(file[path].value[i], axis=0), repeats=3, axis=0
+                ).astype(np.float32),
+                self.y_train[item],
             )
 
 
-class ValDataLoader(torch.utils.data.Dataset):
-    def __init__(self, dataloader: DataLoader):
-        self.dataloader = dataloader
+class ValDataLoader(torch.utils.data.Dataset, DataLoader):
+    def __init__(self):
+        df = pd.read_csv(test_csv_file)
+        self.x_test = df["x"].tolist()
+        self.y_test = df["y"].tolist()
+
         self.file = None
         self.c = num_classes
 
+    def get_state(self, **kwargs):
+        return {**kwargs}
+
     def __len__(self):
-        return len(self.dataloader.x_test)
+        return len(self.x_test)
 
     def __getitem__(self, item):
         with h5py.File(data_preprocessing.hdf_file_path, mode="r") as file:
-            path, i = self.dataloader.split_path(self.dataloader.x_test[item])
+            path, i = super().split_path(self.x_test[item])
             return (
-                np.repeat(np.expand_dims(file[path].value[i], axis=0), repeats=3, axis=0),
-                self.dataloader.y_test[item],
+                np.repeat(
+                    np.expand_dims(file[path].value[i], axis=0), repeats=3, axis=0
+                ).astype(np.float32),
+                self.y_test[item],
             )
+
+
+class CustomImageList(ImageList):
+    def open(self, fn):
+        with h5py.File(data_preprocessing.hdf_file_path, mode="r") as file:
+            path, i = self._split_path(fn)
+            return np.repeat(
+                np.expand_dims(file[path].value[i], axis=0), repeats=3, axis=0
+            ).astype(np.float32)
+
+    def _split_path(self, path: str) -> Tuple[str, int]:
+        splits = path.split("_")
+        return "".join(splits[:-1]), int(splits[-1])
 
 
 if __name__ == "__main__":
     dl = DataLoader()
-    train_dl = TrainDataLoader(dl)
-    print(train_dl.__len__())
-    print(train_dl.__getitem__(10)[0].shape)
+    dl.save()
+
+    # label = pickle.load(label_encoder_file.open("rb"))

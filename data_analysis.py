@@ -97,4 +97,4 @@ def plot_same_bird(bird_name: str = None):
 
 
 if __name__ == "__main__":
-    plot_different_birds()
+    plot_same_bird(bird_name="bkpwar")

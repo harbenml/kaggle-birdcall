@@ -132,6 +132,7 @@ dmypy.json
 .idea/
 data/
 model/
+models/
 analysis/
 test.py
 info.txt
