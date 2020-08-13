@@ -7,12 +7,14 @@ import select
 import sys
 import warnings
 import json
+import subprocess
 
 warnings.filterwarnings("ignore")
 
 import numpy as np
 import math
 import librosa
+from pydub import AudioSegment
 import h5py
 
 sample_length = 5  # sample length in seconds
@@ -28,11 +30,11 @@ n_mels = 128
 
 
 def process_file(file_name: Path) -> Tuple[List[List[float]], int]:
-    try:
-        data, SR = librosa.load(file_name)
-    except ZeroDivisionError:
-        data = []
-        SR = 22050
+    SR = 22050
+    sound = AudioSegment.from_mp3(file_name)
+    sound = sound.set_frame_rate(SR)
+    data0 = sound.get_array_of_samples()
+    data = np.asarray(data0, dtype=np.float32)
 
     # remove leading and trailing zeros from the audio file
     data = np.trim_zeros(data)

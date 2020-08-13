@@ -14,7 +14,7 @@ import data_preprocessing
 
 num_classes = 264
 
-train_csv_file = Path("data/train.csv")
+data_csv_file = Path("data/data.csv")
 test_csv_file = Path("data/test.csv")
 label_encoder_file = Path("data/label_encoder.pkl")
 
@@ -37,26 +37,22 @@ class DataLoader:
 
         print(f"{j} files processed")
 
-        self.label_encoder = preprocessing.LabelEncoder()
-        y = self.label_encoder.fit_transform(y)
-        x, y = utils.shuffle(x, y, random_state=8)
+        # self.label_encoder = preprocessing.LabelEncoder()
+        # y = self.label_encoder.fit_transform(y)
+        self.x, self.y = utils.shuffle(x, y, random_state=8)
+
+        """
         self.x_train, self.x_test, self.y_train, self.y_test = train_test_split(
             x, y, test_size=0.2, random_state=16
         )
 
         self.train_state = 0
         self.test_state = 0
+        """
 
     def save(self):
-        train_df = pd.DataFrame(data={"x": self.x_train, "y": self.y_train})
-        train_df.to_csv(train_csv_file)
-
-        test_df = pd.DataFrame(data={"x": self.x_test, "y": self.y_test})
-        test_df.to_csv(test_csv_file)
-
-        pickle.dump(
-            self.label_encoder, label_encoder_file.open("wb"), pickle.HIGHEST_PROTOCOL
-        )
+        train_df = pd.DataFrame(data={"x": self.x, "y": self.y})
+        train_df.to_csv(data_csv_file)
 
     def get_train_batch(self):
         x, y, state = self._get_batch(self.x_train, self.y_train, self.train_state)
@@ -107,7 +103,7 @@ class DataLoader:
 
 class TrainDataLoader(torch.utils.data.Dataset, DataLoader):
     def __init__(self):
-        df = pd.read_csv(train_csv_file)
+        df = pd.read_csv(data_csv_file)
         self.x_train = df["x"].tolist()
         self.y_train = df["y"].tolist()
 

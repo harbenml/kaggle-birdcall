@@ -13,7 +13,7 @@ from data_loader import (
     TrainDataLoader,
     ValDataLoader,
     CustomImageList,
-    train_csv_file,
+    data_csv_file,
 )
 
 
@@ -40,7 +40,7 @@ np.random.seed(22)
 # data = ImageDataBunch.create(train_ds=train_dl, valid_ds=val_dl, num_workers=8)
 # data.normalize()
 
-df = pd.read_csv(train_csv_file)
+df = pd.read_csv(data_csv_file)
 src = (
     CustomImageList.from_df(df, ".", cols="x")
     .split_by_rand_pct(valid_pct=0.2)
