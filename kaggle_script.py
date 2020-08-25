@@ -1,24 +1,34 @@
 import librosa
 import torchvision
+import torchaudio
+import fastai
 from fastai.vision import *
 from fastai.callbacks import SaveModelCallback
-from pydub import AudioSegment
+import h5py
 
 
 # *****************************************************************************************
 sample_length = 5  # time window length in seconds
+
+SR = 22050
 
 # spectrogram config
 n_fft = 2048
 hop_length = 512
 n_mels = 128
 
-data_folder_path = Path("data/wav")
-train_csv_path = Path("data/mp3/train.csv")
+data_folder_path = Path(
+    "data/mp3/train_audio"
+)  # change for training in a Kaggle Notebook
+train_csv_path = Path("data/mp3/train.csv")  # change for training in a Kaggle Notebook
+
+hdf_file_path = Path("data/audio.hdf5")  # only for local training
 
 # train config
 load_saved_model = False
 saved_model_path = Path("models/bestmodel.pth")
+
+kaggle_platform = True  # set true on Kaggle to load data directly from mp3 files
 # *****************************************************************************************
 
 # set variables for reproducibility
@@ -36,16 +46,20 @@ def preprocess_data() -> pd.DataFrame:
         return pd.read_csv(cache_data_path)
 
     train_csv = pd.read_csv(train_csv_path)
+    train_csv = train_csv.loc[
+        (train_csv["ebird_code"] != "lotduc")
+        & (train_csv["filename"] != "XC195038.mp3")
+    ]
 
     train_data_dict = {"x": [], "y": []}
     for index, row in train_csv.iterrows():
         duration = row["duration"]
-        if duration >= sample_length:
+        if duration > sample_length:
             bird = row["ebird_code"]
             file_name = str(row["filename"]).split(".")[0]
             samples = math.ceil(duration / sample_length)
             for i in range(samples):
-                train_data_dict["x"].append(f"{bird}/{file_name}.wav_{i}")
+                train_data_dict["x"].append(f"{bird}/{file_name}.mp3_{i}")
                 train_data_dict["y"].append(bird)
 
     df = pd.DataFrame(data=train_data_dict)
@@ -58,9 +72,14 @@ class CustomImageList(ImageList):
     def open(self, fn):
         path, i = self._split_path(fn)
 
-        data, sr = librosa.load(path, sr=None, mono=False)
+        if kaggle_platform:
+            absolute_path = data_folder_path.joinpath(path)
+            data, sr = librosa.load(absolute_path, sr=SR, mono=True)
+        else:
+            with h5py.File(hdf_file_path, "r") as file:
+                data = file[path].value
 
-        window_length = sr * sample_length
+        window_length = SR * sample_length
         start = i * window_length
         end = start + window_length
 
@@ -74,9 +93,20 @@ class CustomImageList(ImageList):
         else:
             data_final = data_trim[start:end]
 
-        mel_spec = librosa.feature.melspectrogram(
-            data_final, sr=sr, n_fft=n_fft, hop_length=hop_length, n_mels=n_mels,
-        )  # type: np.ndarray
+        # mel_spec = librosa.feature.melspectrogram(
+        #    data_final, sr=SR, n_fft=n_fft, hop_length=hop_length, n_mels=n_mels,
+        # )  # type: np.ndarray
+
+        mel_spec = torchaudio.transforms.MelSpectrogram(
+            sample_rate=SR, n_fft=n_fft, hop_length=hop_length, n_mels=n_mels
+        )(torch.FloatTensor(data_final))
+        mel_spec = mel_spec.cpu().detach().numpy()
+
+        # just for debugging reasons
+        if mel_spec.shape != (128, 216):
+            print(f"Wrong Shape: {path}, Shape: {mel_spec.shape}")
+            print(f"data_final length: {len(data_final)}")
+            print(f"data length: {len(data)}")
 
         return np.repeat(np.expand_dims(mel_spec, axis=0), repeats=3, axis=0).astype(
             np.float32
@@ -84,7 +114,8 @@ class CustomImageList(ImageList):
 
     def _split_path(self, path: str) -> Tuple[str, int]:
         splits = path.split("_")
-        return "_".join(splits[:-1]), int(splits[-1])
+        path = Path("_".join(splits[:-1]))
+        return "/".join(path.parts[-2:]), int(splits[-1])
 
 
 class DataBunchCallback(Callback):
@@ -95,10 +126,20 @@ class DataBunchCallback(Callback):
         self.data.save("models/data_save.pkl")
 
 
+"""
+class CustomMelSpec(torch.nn.Module):
+    def __init__(self):
+        super(CustomMelSpec, self).__init__()
+
+    def forward(self, x):
+        return torchaudio.functional.spectrogram(x, pad=0, window)
+"""
+
+
 def train(df: pd.DataFrame) -> Learner:
     print("Start training")
     src = (
-        CustomImageList.from_df(df, str(data_folder_path), cols="x")
+        CustomImageList.from_df(df, ".", cols="x")
         .split_by_rand_pct(valid_pct=0.2)
         .label_from_df(cols="y")
     )
@@ -109,9 +150,15 @@ def train(df: pd.DataFrame) -> Learner:
 
     os.environ["TORCH_HOME"] = "models/pretrained"
 
-    learn = cnn_learner(
-        data, torchvision.models.resnet34, metrics=accuracy, pretrained=True
+    resnet34 = torchvision.models.resnet34(pretrained=True)
+    mel_spec = torchaudio.transforms.MelSpectrogram(
+        sample_rate=SR, n_fft=n_fft, hop_length=hop_length, n_mels=n_mels
     )
+
+    # TODO integrate MelSpectrogram calculation into model
+    model = torch.nn.Sequential(resnet34)
+
+    learn = Learner(data, model, metrics=accuracy)
 
     if load_saved_model and saved_model_path.exists():
         learn.load(saved_model_path)
@@ -128,4 +175,5 @@ def train(df: pd.DataFrame) -> Learner:
 
 if __name__ == "__main__":
     train_df = preprocess_data()
-    train(train_df)
+    learn = train(train_df)
+    # TODO write a function to analyze the test data with the trained model

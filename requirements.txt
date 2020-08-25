@@ -4,5 +4,6 @@ librosa
 numba==0.48.0
 torch
 torchvision
+torchaudio
 fastai
 h5py
