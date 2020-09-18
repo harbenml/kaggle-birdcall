@@ -133,7 +133,6 @@ dmypy.json
 data/
 model/
 models/
-analysis/
 test.py
 info.txt
 submission.csv
